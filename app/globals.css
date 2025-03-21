@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #e2e0e0;
   --foreground: #171717;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 @theme inline {
@@ -20,7 +24,38 @@
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
+  background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+button{
+  cursor: pointer;
+}
+
+/* animations */
+@keyframes fastBeep {
+  0% {
+    opacity: 0.1; 
+  }
+  20% {
+    opacity: 1;
+  }
+  40% {
+    opacity: .1;
+  }
+  60% {
+    opacity: 1;
+  }
+  80% {
+    opacity: .1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.fast-beep{
+  animation: fastBeep .5s forwards;
 }
