@@ -2,9 +2,11 @@ import CreatePostButton from "@/components/tribute-post_components/CreateTribute
 import Link from "next/link";
 import Image from "next/image";
 
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "https://nextjs-fundamentals-ecru.vercel.app";
 // Define the Post interface based on your API response structure
 interface Post {
-  id: number;
+  id: string;
   name: string;
   description: string;
   imageUrl: string;
@@ -12,11 +14,20 @@ interface Post {
 }
 
 async function getPosts(): Promise<Post[]> {
-  const res = await fetch("https://nextjs-fundamentals-ecru.vercel.app/api", {
-    cache: "no-store", // Ensure fresh data
-  });
-  return res.json(); // Type inference will align with Post[]
+  try {
+    const res = await fetch(`${API_BASE_URL}/api`, {
+      next: { revalidate: 60 }, // Use ISR instead of no-store
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch posts: ${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  } catch (error) {
+    console.error("Error fetching posts:", error);
+    return []; // Fallback to empty array to prevent build failure
+  }
 }
+
 
 export default async function Page() {
   const posts = await getPosts();
@@ -25,7 +36,7 @@ export default async function Page() {
       <style>
         {`
           body {
-            padding: 0px !important;
+            padding: 0px !important;    
             background-color: white !important;
           }
         `}

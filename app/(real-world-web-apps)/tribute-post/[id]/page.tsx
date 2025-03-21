@@ -5,10 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 
 const jsonFilePath = path.join(process.cwd(), "data", "posts.json");
-// Default to Vercel URL in production, localhost in dev
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  (process.env.NODE_ENV === "development" ? "http://localhost:3000" : "https://nextjs-fundamentals-ecru.vercel.app");
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -27,29 +24,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
 
   let tribute: Post | undefined;
-  try {
-    if (process.env.NODE_ENV === "development") {
-      const postsData = await fs.readFile(jsonFilePath, "utf-8");
-      const posts: Post[] = JSON.parse(postsData || "[]");
-      tribute = posts.find((p) => String(p.id) === id);
-    } else {
-      const response = await fetch(`${API_BASE_URL}/api?id=${id}`);
-      if (!response.ok) {
-        console.error(`API error: ${response.status} ${response.statusText}`);
-        return { title: `Tribute #${id}` };
-      }
-      tribute = await response.json();
+  if (process.env.NODE_ENV === "development") {
+    const postsData = await fs.readFile(jsonFilePath, "utf-8");
+    const posts: Post[] = JSON.parse(postsData || "[]");
+    tribute = posts.find((p) => String(p.id) === id);
+  } else {
+    const response = await fetch(`${API_BASE_URL}/api?id=${id}`);
+    if (!response.ok) {
+      console.error(`API error: ${response.status} ${response.statusText}`);
+      return { title: `Tribute #${id}` };
     }
-  } catch (error) {
-    console.warn("Failed to fetch metadata:", error);
-    return { title: `Tribute #${id}` };
+    tribute = await response.json();
   }
 
-  if (!tribute) return { title: `Tribute #${id}` };
+  if (!tribute) {
+    return {
+      title: `Tribute #${id}`,
+    };
+  }
+
+  const title = titleMetadataCreator(tribute.description);
+  const description = descriptionMetadataCreator(tribute.description);
 
   return {
-    title: titleMetadataCreator(tribute.description),
-    description: descriptionMetadataCreator(tribute.description),
+    title,
+    description,
   };
 }
 
@@ -58,19 +57,27 @@ export const dynamicParams = true; // Allow dynamic rendering for unknown IDs
 
 export async function generateStaticParams() {
   let posts: Post[] = [];
-  try {
-    // Always use posts.json during build to avoid fetch failures
-    const postsData = await fs.readFile(jsonFilePath, "utf-8");
-    posts = JSON.parse(postsData || "[]");
-  } catch (error) {
-    console.warn("Failed to read posts.json during build:", error);
-    // Fallback to hardcoded IDs if posts.json is unavailable
-    return [
-      { id: "1742070085423" }, // Charles Darwin
-      { id: "1742069898679" }, // Albert Einstein
-      { id: "1742050221362" }, // Nikola Tesla
-      { id: "1742050091474" }, // J. Robert Oppenheimer
-    ];
+  if (process.env.NODE_ENV === "development") {
+    try {
+      const postsData = await fs.readFile(jsonFilePath, "utf-8");
+      posts = JSON.parse(postsData || "[]");
+    } catch (error) {
+      console.warn("Failed to read posts.json:", error);
+      return [];
+    }
+  } else {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api`);
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(`API fetch failed: ${response.status} ${response.statusText} - ${text}`);
+        return [];
+      }
+      posts = await response.json();
+    } catch (error) {
+      console.warn("Failed to fetch posts from API:", error);
+      return [];
+    }
   }
   return posts.map((post) => ({
     id: String(post.id),
@@ -80,7 +87,7 @@ export async function generateStaticParams() {
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const response = await fetch(`${API_BASE_URL}/api?id=${id}`, {
-    cache: "no-store", // Fresh data at runtime
+    cache: "no-store",
   });
   if (!response.ok) {
     throw new Error(`Failed to fetch post ${id}: ${response.statusText}`);
@@ -88,7 +95,13 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const post: Post = await response.json();
   return (
     <>
-      <style>{`body { padding: 0px !important; }`}</style>
+      <style>
+        {`
+          body {
+            padding: 0px !important;
+          }
+        `}
+      </style>
       <TributePostDetailPage post={post} />
     </>
   );
