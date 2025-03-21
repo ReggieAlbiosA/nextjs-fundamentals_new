@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 
 interface Post {
-  id: number;
+  id: number; // Kept as number; change to string if needed
   name: string;
   description: string;
   imageUrl: string;
@@ -13,31 +13,28 @@ interface Post {
 const uploadsDir = path.join(process.cwd(), "public", "uploads");
 const jsonFilePath = path.join(process.cwd(), "data", "posts.json");
 
-async function ensureDirectories() {
-  // Only create directories locally; skip in production (Vercel)
-  if (process.env.NODE_ENV === "development") {
-    await fs.mkdir(uploadsDir, { recursive: true });
-    await fs.mkdir(path.dirname(jsonFilePath), { recursive: true });
-  }
-
+async function getPosts(): Promise<Post[]> {
   try {
     const data = await fs.readFile(jsonFilePath, "utf-8");
     if (!data || data.trim() === "") {
       if (process.env.NODE_ENV === "development") {
+        await fs.mkdir(path.dirname(jsonFilePath), { recursive: true });
         await fs.writeFile(jsonFilePath, JSON.stringify([]));
       }
-    } else {
-      JSON.parse(data); // Validate JSON
+      return [];
     }
-  } catch {
+    return JSON.parse(data);
+  } catch (error) {
+    console.error("Failed to read or parse posts.json:", error);
     if (process.env.NODE_ENV === "development") {
+      await fs.mkdir(path.dirname(jsonFilePath), { recursive: true });
       await fs.writeFile(jsonFilePath, JSON.stringify([]));
     }
+    return [];
   }
 }
 
 export async function POST(request: NextRequest) {
-  // Disable writes in production for now
   if (process.env.NODE_ENV !== "development") {
     return NextResponse.json(
       { error: "Post creation is disabled in production. Use a database for persistent storage." },
@@ -46,7 +43,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await ensureDirectories();
+    await fs.mkdir(uploadsDir, { recursive: true });
 
     const formData = await request.formData();
     const file = formData.get("image") as File | null;
@@ -63,11 +60,9 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     await fs.writeFile(filePath, buffer);
 
-    const postsData = await fs.readFile(jsonFilePath, "utf-8");
-    const posts: Post[] = JSON.parse(postsData || "[]");
-
+    const posts = await getPosts();
     const newPost: Post = {
-      id: Date.now(),
+      id: Date.now(), // Number type
       name,
       description,
       imageUrl: `/uploads/${fileName}`,
@@ -86,12 +81,10 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    await ensureDirectories();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
-    const postsData = await fs.readFile(jsonFilePath, "utf-8");
-    const posts: Post[] = JSON.parse(postsData || "[]");
+    const posts = await getPosts();
 
     if (id) {
       const post = posts.find((p) => String(p.id) === id);
